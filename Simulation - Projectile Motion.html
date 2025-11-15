@@ -1,0 +1,658 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Projectile Motion Simulator — Dual Trace</title>
+  <style>
+    :root {
+      --bg: #0f1221;
+      --panel: #11152b;
+      --glass: rgba(255, 255, 255, 0.06);
+      --text: #e8ecf1;
+      --muted: #a8b0c3;
+      --accent: #7c5cff;     /* brand grad 1 */
+      --accent-2: #03c3ff;   /* brand grad 2 */
+      --pathA: #69d2ff;      /* cyan for Trace A */
+      --pathB: #ff7cd8;      /* pink for Trace B */
+      --ballA: #ffc857;      /* amber ball A */
+      --ballB: #9cff57;      /* lime ball B */
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      height: 100%;
+      margin: 0;
+      background: radial-gradient(1400px 700px at 60% 20%, #171a36 0%, var(--bg) 70%);
+      color: var(--text);
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, "Helvetica Neue", Arial;
+    }
+    header {
+      padding: 16px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    header .brand {
+      font-weight: 700;
+      letter-spacing: 0.3px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    header .brand .dot {
+      width: 10px; height: 10px; border-radius: 50%;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      box-shadow: 0 0 12px rgba(124,92,255,0.7);
+    }
+    .app {
+      display: grid;
+      grid-template-columns: 420px 1fr;
+      gap: 18px;
+      padding: 0 24px 24px;
+    }
+    @media (max-width: 1080px) { .app { grid-template-columns: 1fr; } }
+    .panel {
+      background: linear-gradient(180deg, var(--panel), #0c1030);
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 16px;
+      padding: 16px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.35);
+      backdrop-filter: blur(8px);
+    }
+    .panel h2, .panel h3 {
+      margin: 4px 0 10px;
+      font-size: 18px;
+      color: var(--text);
+    }
+    .control { margin: 12px 0 18px; }
+    .control label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 13px;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+    .control .value { color: var(--text); font-weight: 600; }
+    .row {
+      display: grid;
+      grid-template-columns: 1fr 110px;
+      gap: 10px;
+      align-items: center;
+    }
+    input[type="range"] {
+      width: 100%;
+      -webkit-appearance: none; appearance: none;
+      height: 6px; border-radius: 999px;
+      background: linear-gradient(90deg, var(--accent), var(--accent-2));
+      outline: none;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none; appearance: none;
+      width: 18px; height: 18px; border-radius: 50%;
+      background: #fff; border: 2px solid var(--accent);
+      box-shadow: 0 4px 10px rgba(0,0,0,0.3); cursor: pointer;
+    }
+    input[type="number"] {
+      width: 100%;
+      padding: 8px 10px; border-radius: 10px;
+      border: 1px solid rgba(255,255,255,0.12);
+      background: var(--glass); color: var(--text);
+      outline: none;
+    }
+    .actions {
+      display: flex; gap: 10px; margin-top: 6px; flex-wrap: wrap;
+    }
+    button {
+      appearance: none; border: none; border-radius: 12px;
+      padding: 10px 14px; font-weight: 600; color: #0c0f1e;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      box-shadow: 0 8px 18px rgba(3,195,255,0.25); cursor: pointer;
+    }
+    button.secondary {
+      background: #202540; color: var(--text);
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+    .toggle {
+      display: inline-flex; align-items: center; gap: 8px; margin-top: 6px; color: var(--muted);
+      font-size: 13px;
+    }
+    .toggle input { accent-color: var(--accent); }
+
+    .metrics {
+      margin-top: 12px;
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 10px;
+    }
+    .metric-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+    }
+    .metric {
+      background: var(--glass);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 12px;
+      padding: 10px 12px;
+    }
+    .metric .label { font-size: 12px; color: var(--muted); }
+    .metric .val { font-size: 18px; font-weight: 700; margin-top: 2px; }
+    .metricTitle {
+      font-weight: 700; color: var(--text);
+      display: flex; align-items: center; gap: 8px; margin-top: 8px;
+    }
+    .swatch { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+    .swatchA { background: var(--pathA); box-shadow: 0 0 8px rgba(105,210,255,0.8); }
+    .swatchB { background: var(--pathB); box-shadow: 0 0 8px rgba(255,124,216,0.8); }
+
+    .subpanel {
+      margin-top: 14px; padding: 12px; border-radius: 12px;
+      border: 1px dashed rgba(255,255,255,0.12); background: rgba(255,255,255,0.03);
+    }
+
+    .canvas-wrap { position: relative; min-height: 380px; }
+    canvas {
+      width: 100%; height: 560px;
+      background: radial-gradient(1200px 400px at 40% 60%, rgba(124,92,255,0.08) 0%, rgba(3,195,255,0.06) 40%, rgba(255,255,255,0.02) 100%), #0b0e22;
+      border: 1px solid rgba(255,255,255,0.08); border-radius: 16px;
+    }
+    .legend {
+      position: absolute; right: 12px; top: 12px;
+      background: var(--glass); color: var(--muted); font-size: 12px;
+      padding: 6px 8px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.08);
+      display: flex; gap: 10px;
+    }
+    .legend span { display: inline-flex; align-items: center; gap: 6px; }
+    .note { margin-top: 12px; font-size: 12px; color: var(--muted); }
+  </style>
+</head>
+<body>
+<header>
+  <div class="brand"><span class="dot"></span> Projectile Motion Simulator</div>
+  <div class="note">g = 9.81 m/s² (no air resistance)</div>
+</header>
+
+<main class="app">
+  <!-- LEFT PANEL -->
+  <section class="panel">
+    <h2>Trace A — Launch Parameters</h2>
+
+    <div class="control">
+      <label>Initial height <span class="value"><span id="hAVal">2.0</span> m</span></label>
+      <div class="row">
+        <input id="hARange" type="range" min="0" max="100" step="0.1" value="2" />
+        <input id="hAInput" type="number" min="0" max="100" step="0.1" value="2" />
+      </div>
+    </div>
+
+    <div class="control">
+      <label>Launch speed <span class="value"><span id="vAVal">20.0</span> m/s</span></label>
+      <div class="row">
+        <input id="vARange" type="range" min="0" max="120" step="0.1" value="20" />
+        <input id="vAInput" type="number" min="0" max="120" step="0.1" value="20" />
+      </div>
+    </div>
+
+    <div class="control">
+      <label>Launch angle <span class="value"><span id="aAVal">35.0</span>°</span></label>
+      <div class="row">
+        <input id="aARange" type="range" min="0" max="90" step="0.1" value="35" />
+        <input id="aAInput" type="number" min="0" max="90" step="0.1" value="35" />
+      </div>
+    </div>
+
+    <div class="toggle">
+      <input type="checkbox" id="animateChk" checked />
+      <label for="animateChk">Animate projectiles</label>
+    </div>
+    <div class="toggle">
+      <input type="checkbox" id="gridChk" checked />
+      <label for="gridChk">Show axes & grid</label>
+    </div>
+
+    <div class="actions">
+      <button id="playBtn">▶ Play</button>
+      <button id="pauseBtn" class="secondary">⏸ Pause</button>
+      <button id="resetBtn" class="secondary">↺ Reset</button>
+    </div>
+
+    <!-- Metrics for Trace A -->
+    <div class="metrics">
+      <div class="metricTitle"><span class="swatch swatchA"></span> Trace A — Metrics</div>
+      <div class="metric-grid">
+        <div class="metric"><div class="label">Time of flight</div><div class="val"><span id="tA">0.00</span> s</div></div>
+        <div class="metric"><div class="label">Range</div><div class="val"><span id="rA">0.00</span> m</div></div>
+        <div class="metric"><div class="label">Peak height</div><div class="val"><span id="yAmax">0.00</span> m</div></div>
+        <div class="metric"><div class="label">Impact speed</div><div class="val"><span id="impactA">0.00</span> m/s</div></div>
+        <div class="metric"><div class="label">Initial v<sub>x0</sub></div><div class="val"><span id="vxA0">0.00</span> m/s</div></div>
+        <div class="metric"><div class="label">Initial v<sub>y0</sub></div><div class="val"><span id="vyA0">0.00</span> m/s</div></div>
+      </div>
+    </div>
+
+    <!-- Trace B Controls -->
+    <div class="subpanel">
+      <div class="toggle">
+        <input type="checkbox" id="enableB" />
+        <label for="enableB"><strong>Enable Trace B (compare)</strong></label>
+      </div>
+
+      <div id="traceBControls" style="display:none; margin-top:8px;">
+        <h3>Trace B — Launch Parameters</h3>
+
+        <div class="control">
+          <label>Initial height <span class="value"><span id="hBVal">2.0</span> m</span></label>
+          <div class="row">
+            <input id="hBRange" type="range" min="0" max="100" step="0.1" value="2" />
+            <input id="hBInput" type="number" min="0" max="100" step="0.1" value="2" />
+          </div>
+        </div>
+
+        <div class="control">
+          <label>Launch speed <span class="value"><span id="vBVal">25.0</span> m/s</span></label>
+          <div class="row">
+            <input id="vBRange" type="range" min="0" max="120" step="0.1" value="25" />
+            <input id="vBInput" type="number" min="0" max="120" step="0.1" value="25" />
+          </div>
+        </div>
+
+        <div class="control">
+          <label>Launch angle <span class="value"><span id="aBVal">45.0</span>°</span></label>
+          <div class="row">
+            <input id="aBRange" type="range" min="0" max="90" step="0.1" value="45" />
+            <input id="aBInput" type="number" min="0" max="90" step="0.1" value="45" />
+          </div>
+        </div>
+
+        <!-- Metrics for Trace B -->
+        <div class="metrics">
+          <div class="metricTitle"><span class="swatch swatchB"></span> Trace B — Metrics</div>
+          <div class="metric-grid">
+            <div class="metric"><div class="label">Time of flight</div><div class="val"><span id="tB">0.00</span> s</div></div>
+            <div class="metric"><div class="label">Range</div><div class="val"><span id="rB">0.00</span> m</div></div>
+            <div class="metric"><div class="label">Peak height</div><div class="val"><span id="yBmax">0.00</span> m</div></div>
+            <div class="metric"><div class="label">Impact speed</div><div class="val"><span id="impactB">0.00</span> m/s</div></div>
+            <div class="metric"><div class="label">Initial v<sub>x0</sub></div><div class="val"><span id="vxB0">0.00</span> m/s</div></div>
+            <div class="metric"><div class="label">Initial v<sub>y0</sub></div><div class="val"><span id="vyB0">0.00</span> m/s</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <p class="note">Tip: Enable Trace B to compare two launches. The canvas auto-scales to fit both trajectories.</p>
+  </section>
+
+  <!-- RIGHT PANEL: CANVAS -->
+  <section class="panel canvas-wrap">
+    <div class="legend">
+      <span><span class="swatch swatchA"></span> Trace A</span>
+      <span><span class="swatch swatchB"></span> Trace B</span>
+    </div>
+    <canvas id="scene" width="1400" height="560" aria-label="Projectile motion canvas"></canvas>
+  </section>
+</main>
+
+<script>
+  // --- Elements (Trace A)
+  const hARange = document.getElementById('hARange');
+  const hAInput = document.getElementById('hAInput');
+  const vARange = document.getElementById('vARange');
+  const vAInput = document.getElementById('vAInput');
+  const aARange = document.getElementById('aARange');
+  const aAInput = document.getElementById('aAInput');
+  const hAVal = document.getElementById('hAVal');
+  const vAVal = document.getElementById('vAVal');
+  const aAVal = document.getElementById('aAVal');
+
+  // Metrics A
+  const tA = document.getElementById('tA');
+  const rA = document.getElementById('rA');
+  const yAmax = document.getElementById('yAmax');
+  const impactA = document.getElementById('impactA');
+  const vxA0 = document.getElementById('vxA0');
+  const vyA0 = document.getElementById('vyA0');
+
+  // Trace B controls + toggle
+  const enableB = document.getElementById('enableB');
+  const traceBControls = document.getElementById('traceBControls');
+
+  const hBRange = document.getElementById('hBRange');
+  const hBInput = document.getElementById('hBInput');
+  const vBRange = document.getElementById('vBRange');
+  const vBInput = document.getElementById('vBInput');
+  const aBRange = document.getElementById('aBRange');
+  const aBInput = document.getElementById('aBInput');
+  const hBVal = document.getElementById('hBVal');
+  const vBVal = document.getElementById('vBVal');
+  const aBVal = document.getElementById('aBVal');
+
+  // Metrics B
+  const tB = document.getElementById('tB');
+  const rB = document.getElementById('rB');
+  const yBmax = document.getElementById('yBmax');
+  const impactB = document.getElementById('impactB');
+  const vxB0 = document.getElementById('vxB0');
+  const vyB0 = document.getElementById('vyB0');
+
+  // General UI
+  const playBtn = document.getElementById('playBtn');
+  const pauseBtn = document.getElementById('pauseBtn');
+  const resetBtn = document.getElementById('resetBtn');
+  const animateChk = document.getElementById('animateChk');
+  const gridChk = document.getElementById('gridChk');
+
+  const canvas = document.getElementById('scene');
+  const ctx = canvas.getContext('2d');
+
+  // Physics constants
+  const g = 9.81; // m/s^2
+
+  // State
+  let A = { h0: 2, v0: 20, angleDeg: 35 };
+  let B = { h0: 2, v0: 25, angleDeg: 45, enabled: false };
+  let animRAF = null;
+  let tAnim = 0;
+  let playing = false;
+  let timeScale = 1.0;
+
+  // Utils
+  const clamp = (x, min, max) => Math.max(min, Math.min(max, x));
+  const deg2rad = d => d * Math.PI / 180;
+
+  function computeTrajectory(h0, v0, angleDeg) {
+    const theta = deg2rad(angleDeg);
+    const vx = v0 * Math.cos(theta);
+    const vy = v0 * Math.sin(theta);
+
+    // y(t) = h0 + vy t - 0.5 g t^2 = 0 => T from quadratic (positive root)
+    const disc = vy * vy + 2 * g * h0;
+    const T = (vy + Math.sqrt(Math.max(0, disc))) / g;
+    const range = vx * T;
+    const yMax = h0 + (vy * vy) / (2 * g);
+    const impactSpeed = Math.sqrt(vx*vx + (vy - g*T)*(vy - g*T));
+
+    // Sample path
+    const N = 300;
+    const points = [];
+    for (let i = 0; i <= N; i++) {
+      const t = T * i / N;
+      const x = vx * t;
+      const y = h0 + vy * t - 0.5 * g * t * t;
+      points.push({ t, x, y });
+    }
+    return { h0, v0, angleDeg, vx, vy, T, range, yMax, impactSpeed, points };
+  }
+
+  function format(n) { return (Math.round(n * 100) / 100).toFixed(2); }
+
+  // Scale to fit all active traces
+  function getScale(trajs) {
+    const margin = 40;
+    let maxX = 5, maxY = 5;
+    trajs.forEach(tr => {
+      if (!tr) return;
+      maxX = Math.max(maxX, tr.range);
+      maxY = Math.max(maxY, tr.yMax);
+    });
+    maxX *= 1.08; // padding
+    maxY *= 1.12;
+
+    const xScale = (canvas.width - margin * 2) / maxX;
+    const yScale = (canvas.height - margin * 2) / maxY;
+    return { margin, xScale, yScale, maxX, maxY };
+  }
+
+  function worldToScreen(x, y, scale) {
+    const { margin, xScale, yScale } = scale;
+    return {
+      sx: margin + x * xScale,
+      sy: canvas.height - margin - y * yScale
+    };
+  }
+
+  function drawGrid(scale) {
+    const { margin, maxX, maxY } = scale;
+    const y0 = worldToScreen(0, 0, scale).sy;
+    const x0 = worldToScreen(0, 0, scale).sx;
+
+    ctx.save();
+    ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+    ctx.lineWidth = 1;
+
+    // Axes
+    ctx.beginPath(); ctx.moveTo(margin, y0); ctx.lineTo(canvas.width - margin, y0); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x0, canvas.height - margin); ctx.lineTo(x0, margin); ctx.stroke();
+
+    // Grid lines
+    ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+    const nx = Math.max(5, Math.round(maxX / 10));
+    const ny = Math.max(5, Math.round(maxY / 10));
+    for (let i = 1; i <= nx; i++) {
+      const x = (maxX / nx) * i;
+      const p = worldToScreen(x, 0, scale);
+      ctx.beginPath(); ctx.moveTo(p.sx, canvas.height - margin); ctx.lineTo(p.sx, margin); ctx.stroke();
+    }
+    for (let j = 1; j <= ny; j++) {
+      const y = (maxY / ny) * j;
+      const p = worldToScreen(0, y, scale);
+      ctx.beginPath(); ctx.moveTo(margin, p.sy); ctx.lineTo(canvas.width - margin, p.sy); ctx.stroke();
+    }
+
+    // Labels
+    ctx.fillStyle = 'rgba(255,255,255,0.6)';
+    ctx.font = '12px system-ui';
+    ctx.fillText('x (m)', canvas.width - margin - 40, y0 - 6);
+    ctx.fillText('y (m)', x0 + 6, margin + 16);
+
+    // Ground bold
+    ctx.strokeStyle = 'rgba(255,255,255,0.18)';
+    ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(margin, y0); ctx.lineTo(canvas.width - margin, y0); ctx.stroke();
+
+    ctx.restore();
+  }
+
+  function drawTrajectory(traj, scale, color) {
+    ctx.save();
+    ctx.lineWidth = 2.5;
+    ctx.strokeStyle = color;
+    ctx.beginPath();
+    traj.points.forEach((p, i) => {
+      const { sx, sy } = worldToScreen(p.x, p.y, scale);
+      if (i === 0) ctx.moveTo(sx, sy); else ctx.lineTo(sx, sy);
+    });
+    ctx.stroke();
+
+    // Markers at start and landing
+    const s0 = worldToScreen(traj.points[0].x, traj.points[0].y, scale);
+    const s1 = worldToScreen(traj.points[traj.points.length-1].x, traj.points[traj.points.length-1].y, scale);
+    ctx.fillStyle = color;
+    ctx.beginPath(); ctx.arc(s0.sx, s0.sy, 4, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(s1.sx, s1.sy, 4, 0, Math.PI*2); ctx.fill();
+    ctx.restore();
+  }
+
+  function drawBall(traj, scale, t, color) {
+    const x = traj.vx * t;
+    const y = traj.h0 + traj.vy * t - 0.5 * g * t * t;
+    const { sx, sy } = worldToScreen(x, y, scale);
+    ctx.save();
+    ctx.fillStyle = color;
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 12;
+    ctx.beginPath(); ctx.arc(sx, sy, 6, 0, Math.PI*2); ctx.fill();
+    ctx.restore();
+  }
+
+  function render() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    const trajA = computeTrajectory(A.h0, A.v0, A.angleDeg);
+    const activeTraces = [trajA];
+    let trajB = null;
+    if (B.enabled) {
+      trajB = computeTrajectory(B.h0, B.v0, B.angleDeg);
+      activeTraces.push(trajB);
+    }
+    const scale = getScale(activeTraces);
+
+    if (gridChk.checked) drawGrid(scale);
+    drawTrajectory(trajA, scale, getComputedStyle(document.documentElement).getPropertyValue('--pathA').trim());
+    if (B.enabled) {
+      drawTrajectory(trajB, scale, getComputedStyle(document.documentElement).getPropertyValue('--pathB').trim());
+    }
+
+    if (animateChk.checked) {
+      const t = Math.max(0, Math.min(tAnim, trajA.T));
+      drawBall(trajA, scale, t, getComputedStyle(document.documentElement).getPropertyValue('--ballA').trim());
+      if (B.enabled) {
+        const tBnow = Math.max(0, Math.min(tAnim, trajB.T));
+        drawBall(trajB, scale, tBnow, getComputedStyle(document.documentElement).getPropertyValue('--ballB').trim());
+      }
+    }
+
+    updateMetrics(trajA, trajB);
+  }
+
+  function updateMetrics(trajA, trajB) {
+    // A
+    hAVal.textContent = A.h0.toFixed(1);
+    vAVal.textContent = A.v0.toFixed(1);
+    aAVal.textContent = A.angleDeg.toFixed(1);
+
+    tA.textContent = format(trajA.T);
+    rA.textContent = format(trajA.range);
+    yAmax.textContent = format(trajA.yMax);
+    impactA.textContent = format(trajA.impactSpeed);
+    vxA0.textContent = format(trajA.vx);
+    vyA0.textContent = format(trajA.vy);
+
+    // B
+    if (B.enabled && trajB) {
+      hBVal.textContent = B.h0.toFixed(1);
+      vBVal.textContent = B.v0.toFixed(1);
+      aBVal.textContent = B.angleDeg.toFixed(1);
+
+      tB.textContent = format(trajB.T);
+      rB.textContent = format(trajB.range);
+      yBmax.textContent = format(trajB.yMax);
+      impactB.textContent = format(trajB.impactSpeed);
+      vxB0.textContent = format(trajB.vx);
+      vyB0.textContent = format(trajB.vy);
+    } else {
+      // Clear B metrics display to dashes when disabled
+      ['tB','rB','yBmax','impactB','vxB0','vyB0','hBVal','vBVal','aBVal'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = (id.endsWith('Val') ? '—' : '—');
+      });
+    }
+  }
+
+  // --- Event wiring helpers
+  function syncAFromInputs() {
+    A.h0 = clamp(parseFloat(hAInput.value), Number(hAInput.min), Number(hAInput.max));
+    A.v0 = clamp(parseFloat(vAInput.value), Number(vAInput.min), Number(vAInput.max));
+    A.angleDeg = clamp(parseFloat(aAInput.value), Number(aAInput.min), Number(aAInput.max));
+    hARange.value = A.h0; vARange.value = A.v0; aARange.value = A.angleDeg;
+    if (!playing) tAnim = 0;
+    render();
+  }
+  function syncBFromInputs() {
+    B.h0 = clamp(parseFloat(hBInput.value), Number(hBInput.min), Number(hBInput.max));
+    B.v0 = clamp(parseFloat(vBInput.value), Number(vBInput.min), Number(vBInput.max));
+    B.angleDeg = clamp(parseFloat(aBInput.value), Number(aBInput.min), Number(aBInput.max));
+    hBRange.value = B.h0; vBRange.value = B.v0; aBRange.value = B.angleDeg;
+    if (!playing) tAnim = 0;
+    render();
+  }
+
+  // Trace A listeners
+  [hARange, vARange, aARange].forEach(el => {
+    el.addEventListener('input', () => {
+      if (el === hARange) hAInput.value = hARange.value;
+      if (el === vARange) vAInput.value = vARange.value;
+      if (el === aARange) aAInput.value = aARange.value;
+      syncAFromInputs();
+    });
+  });
+  [hAInput, vAInput, aAInput].forEach(el => {
+    el.addEventListener('input', syncAFromInputs);
+    el.addEventListener('change', syncAFromInputs);
+  });
+
+  // Trace B listeners
+  enableB.addEventListener('change', () => {
+    B.enabled = enableB.checked;
+    traceBControls.style.display = B.enabled ? 'block' : 'none';
+    if (!playing) tAnim = 0;
+    render();
+  });
+  [hBRange, vBRange, aBRange].forEach(el => {
+    el.addEventListener('input', () => {
+      if (el === hBRange) hBInput.value = hBRange.value;
+      if (el === vBRange) vBInput.value = vBRange.value;
+      if (el === aBRange) aBInput.value = aBRange.value;
+      syncBFromInputs();
+    });
+  });
+  [hBInput, vBInput, aBInput].forEach(el => {
+    el.addEventListener('input', syncBFromInputs);
+    el.addEventListener('change', syncBFromInputs);
+  });
+
+  // Misc toggles
+  gridChk.addEventListener('change', render);
+  animateChk.addEventListener('change', () => {
+    if (!animateChk.checked) { playing = false; tAnim = 0; cancelAnimationFrame(animRAF); }
+    render();
+  });
+
+  // Animation loop
+  let lastTS = null;
+  function step(ts) {
+    if (!playing) return;
+    if (lastTS == null) lastTS = ts;
+    const dt = (ts - lastTS) / 1000;
+    lastTS = ts;
+
+    // advance time; stop when both are done (use max T)
+    const TA = computeTrajectory(A.h0, A.v0, A.angleDeg).T;
+    const TB = B.enabled ? computeTrajectory(B.h0, B.v0, B.angleDeg).T : 0;
+    const Tmax = Math.max(TA, TB);
+    tAnim += dt * timeScale;
+    if (tAnim >= Tmax) { tAnim = Tmax; playing = false; }
+    render();
+    if (playing) animRAF = requestAnimationFrame(step);
+  }
+
+  playBtn.addEventListener('click', () => {
+    if (!animateChk.checked) return;
+    playing = true; lastTS = null;
+    cancelAnimationFrame(animRAF);
+    animRAF = requestAnimationFrame(step);
+  });
+  pauseBtn.addEventListener('click', () => {
+    playing = false; cancelAnimationFrame(animRAF); render();
+  });
+  resetBtn.addEventListener('click', () => {
+    playing = false; tAnim = 0; cancelAnimationFrame(animRAF); render();
+  });
+
+  // Initial render + DPI scaling
+  function resizeCanvasForDPI() {
+    const ratio = window.devicePixelRatio || 1;
+    const w = canvas.clientWidth;
+    const h = canvas.clientHeight;
+    canvas.width = Math.round(w * ratio);
+    canvas.height = Math.round(h * ratio);
+    ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+    render();
+  }
+  window.addEventListener('resize', resizeCanvasForDPI);
+
+  // Boot
+  syncAFromInputs();
+  syncBFromInputs();
+  resizeCanvasForDPI();
+</script>
+</body>
+</html>
